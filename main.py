@@ -12,7 +12,7 @@ from fastapi.responses import Response
 
 # Environment-based configuration
 PORT = int(os.getenv('PORT', 8000))
-MODEL_PATH = os.getenv('MODEL_PATH', '/app/xgboost_model.sav')
+MODEL_PATH = os.getenv('MODEL_PATH', 'xgboost_model.sav')
 LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO')
 
 # Optimized logging
