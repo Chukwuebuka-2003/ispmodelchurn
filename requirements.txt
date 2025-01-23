@@ -5,3 +5,4 @@ fastapi
 joblib
 pandas
 imblearn
+xgboost
