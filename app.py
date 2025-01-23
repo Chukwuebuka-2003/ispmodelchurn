@@ -51,7 +51,7 @@ class InputData(BaseModel):
     ChildrenInHH: int
 
 # Load the model
-MODEL_PATH = os.getenv("MODEL_PATH", "xgboost_model.sav")
+MODEL_PATH = os.getenv("MODEL_PATH", "lr_model.sav")
 try:
     with open(MODEL_PATH, 'rb') as file:
         model = pickle.load(file)
