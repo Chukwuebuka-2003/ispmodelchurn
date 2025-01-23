@@ -4,3 +4,4 @@ prometheus_fastapi_instrumentator
 fastapi
 joblib
 pandas
+imblearn
