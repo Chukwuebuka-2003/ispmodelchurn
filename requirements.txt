@@ -2,3 +2,4 @@ gunicorn
 uvicorn 
 prometheus_fastapi_instrumentator
 fastapi
+joblib
