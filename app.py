@@ -1,5 +1,6 @@
 from flask import Flask, request, jsonify
 from pydantic import BaseModel, ValidationError
+from flask_cors import CORS  # Import Flask-CORS
 import pickle
 import pandas as pd
 import logging
@@ -11,6 +12,9 @@ logger = logging.getLogger(__name__)
 
 # Initialize Flask app
 app = Flask(__name__)
+
+# Enable CORS
+CORS(app, resources={r"/predict": {"origins": ["http://localhost:5173", "https://your-frontend-url.com"]}})  # Adjust as needed
 
 # Define the feature set
 features = [
