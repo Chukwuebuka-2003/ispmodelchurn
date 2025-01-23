@@ -5,6 +5,7 @@ import pickle
 import pandas as pd
 import logging
 import os
+from sklearn.preprocessing import MinMaxScaler
 
 # Configure Logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -17,14 +18,13 @@ app = Flask(__name__)
 CORS(app, resources={r"/predict": {"origins": ["http://localhost:5175", "https://your-frontend-url.com"]}})  # Adjust as needed
 
 # Define the feature set
-features = [
-    'total_unsuccessful_calls', 'CustomerServiceInteractionRatio', 'MinutesOverUsage',
-    'TotalRevenueGenerated', 'TotalCallFeaturesUsed', 'RetentionCalls',
-    'RetentionOffersAccepted', 'MadeCallToRetentionTeam', 'AdjustmentsToCreditRating',
-    'MonthlyRevenue', 'TotalRecurringCharge', 'OverageMinutes', 'MonthsInService',
-    'PercChangeMinutes', 'PercChangeRevenues', 'HandsetPrice', 'CreditRating',
-    'IncomeGroup', 'AgeHH1', 'AgeHH2', 'ChildrenInHH'
-]
+numerical_features = ['total_unsuccessful_calls', 'CustomerServiceInteractionRatio', 'MinutesOverUsage',
+                     'TotalRevenueGenerated', 'TotalCallFeaturesUsed', 'MonthlyRevenue', 'TotalRecurringCharge',
+                     'OverageMinutes', 'MonthsInService', 'PercChangeMinutes', 'PercChangeRevenues',
+                     'HandsetPrice']
+label_encoded_features = ['CreditRating', 'IncomeGroup', 'AgeHH1', 'AgeHH2', 'ChildrenInHH']
+binary_features = ['RetentionCalls', 'RetentionOffersAccepted', 'MadeCallToRetentionTeam', 'AdjustmentsToCreditRating']
+features = numerical_features + label_encoded_features + binary_features
 
 # Input data model
 class InputData(BaseModel):
@@ -50,8 +50,9 @@ class InputData(BaseModel):
     AgeHH2: int
     ChildrenInHH: int
 
-# Load the model
-MODEL_PATH = os.getenv("MODEL_PATH", "lr_model.sav")
+# Load the model and the scaler
+MODEL_PATH = os.getenv("MODEL_PATH", "xgboost_model.sav")
+SCALER_PATH = os.getenv("SCALER_PATH", "minmax_scaler.sav")
 try:
     with open(MODEL_PATH, 'rb') as file:
         model = pickle.load(file)
@@ -60,6 +61,14 @@ except Exception as e:
     logger.error("Failed to load the model: %s", e)
     raise RuntimeError(f"Error loading model: {e}")
 
+try:
+    with open(SCALER_PATH, 'rb') as file:
+        scaler = pickle.load(file)
+    logger.info("Scaler successfully loaded from %s", SCALER_PATH)
+except Exception as e:
+    logger.error("Failed to load the scaler: %s", e)
+    raise RuntimeError(f"Error loading scaler: {e}")
+
 @app.route('/predict', methods=['POST'])
 def predict_churn():
     """
@@ -67,15 +76,26 @@ def predict_churn():
     """
     try:
         # Parse and validate input data
-        input_json = request.json
-        input_data = InputData(**input_json)
+        input_json = request.get_json()
+        input_data = InputData(**input_json).dict() # convert the pydantic object to a dict
 
         # Convert input to a Pandas DataFrame
-        data_df = pd.DataFrame([input_data.dict()])[features]
+        data_df = pd.DataFrame(input_data) # Pass the input data as a dict, and not a list of dicts.
+
+        # Create separate dataframes for numerical, label encoded, and binary features
+        input_data_numerical = data_df[numerical_features + label_encoded_features]
+        input_data_binary = data_df[binary_features]
+
+        # Scale numerical and label encoded features
+        scaled_data = scaler.transform(input_data_numerical)
+        scaled_df = pd.DataFrame(scaled_data, columns = numerical_features + label_encoded_features, index = data_df.index)
+
+        # Combine the features
+        preprocessed_input = pd.concat([scaled_df.reset_index(drop = True), input_data_binary.reset_index(drop = True)], axis=1)
 
         # Make predictions
-        predicted_churn = model.predict(data_df)[0]
-        churn_probability = model.predict_proba(data_df)[0][1]
+        predicted_churn = model.predict(preprocessed_input)[0]
+        churn_probability = model.predict_proba(preprocessed_input)[0][1]
 
         return jsonify({
             'predicted_churn': int(predicted_churn),
