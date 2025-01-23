@@ -1,6 +1,6 @@
 gunicorn
 uvicorn 
-prometheus_fastapi_instrumentator
+prometheus-client
 fastapi
 joblib
 pandas
