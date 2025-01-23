@@ -6,3 +6,5 @@ joblib
 pandas
 imblearn
 xgboost
+scikit-learn
+pydantic
