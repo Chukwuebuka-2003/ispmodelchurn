@@ -14,14 +14,14 @@ logger = logging.getLogger(__name__)
 # Initialize Flask app
 app = Flask(__name__)
 
-# Enable CORS
-CORS(app, resources={r"/predict": {"origins": ["http://localhost:5175", "https://your-frontend-url.com"]}})  # Adjust as needed
+# Enable CORS for the specific frontend URL
+CORS(app, resources={r"/predict": {"origins": ["http://localhost:5173", "https://ispmodelchurn.vercel.app"]}})
 
 # Define the feature set
 numerical_features = ['total_unsuccessful_calls', 'CustomerServiceInteractionRatio', 'MinutesOverUsage',
-                     'TotalRevenueGenerated', 'TotalCallFeaturesUsed', 'MonthlyRevenue', 'TotalRecurringCharge',
-                     'OverageMinutes', 'MonthsInService', 'PercChangeMinutes', 'PercChangeRevenues',
-                     'HandsetPrice']
+                      'TotalRevenueGenerated', 'TotalCallFeaturesUsed', 'MonthlyRevenue', 'TotalRecurringCharge',
+                      'OverageMinutes', 'MonthsInService', 'PercChangeMinutes', 'PercChangeRevenues',
+                      'HandsetPrice']
 label_encoded_features = ['CreditRating', 'IncomeGroup', 'AgeHH1', 'AgeHH2', 'ChildrenInHH']
 binary_features = ['RetentionCalls', 'RetentionOffersAccepted', 'MadeCallToRetentionTeam', 'AdjustmentsToCreditRating']
 features = numerical_features + label_encoded_features + binary_features
@@ -77,10 +77,10 @@ def predict_churn():
     try:
         # Parse and validate input data
         input_json = request.get_json()
-        input_data = InputData(**input_json).dict() # convert the pydantic object to a dict
+        input_data = InputData(**input_json).dict()  # Convert the Pydantic object to a dict
 
         # Convert input to a Pandas DataFrame
-        data_df = pd.DataFrame(input_data, index = [0]) # Pass the input data as a dict, and not a list of dicts.
+        data_df = pd.DataFrame(input_data, index=[0])
 
         # Create separate dataframes for numerical, label encoded, and binary features
         input_data_numerical = data_df[numerical_features + label_encoded_features]
@@ -88,10 +88,10 @@ def predict_churn():
 
         # Scale numerical and label encoded features
         scaled_data = scaler.transform(input_data_numerical)
-        scaled_df = pd.DataFrame(scaled_data, columns = numerical_features + label_encoded_features, index = data_df.index)
+        scaled_df = pd.DataFrame(scaled_data, columns=numerical_features + label_encoded_features, index=data_df.index)
 
         # Combine the features
-        preprocessed_input = pd.concat([scaled_df.reset_index(drop = True), input_data_binary.reset_index(drop = True)], axis=1)
+        preprocessed_input = pd.concat([scaled_df.reset_index(drop=True), input_data_binary.reset_index(drop=True)], axis=1)
 
         # Make predictions
         predicted_churn = model.predict(preprocessed_input)[0]
