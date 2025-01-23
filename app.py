@@ -14,8 +14,12 @@ logger = logging.getLogger(__name__)
 # Initialize Flask app
 app = Flask(__name__)
 
-# Enable CORS for the specific frontend URL
-CORS(app, resources={r"/predict": {"origins": ["http://localhost:5173", "https://ispmodelchurn.vercel.app"]}})
+# Enable CORS for all routes, allowing specified origins, methods, and headers
+CORS(app, resources={r"/*": {
+    "origins": ["http://localhost:5173", "https://ispmodelchurn.vercel.app"],
+    "methods": ["GET", "POST"],
+    "allow_headers": ["Content-Type", "Authorization"]
+}})
 
 # Define the feature set
 numerical_features = ['total_unsuccessful_calls', 'CustomerServiceInteractionRatio', 'MinutesOverUsage',
