@@ -80,7 +80,7 @@ def predict_churn():
         input_data = InputData(**input_json).dict() # convert the pydantic object to a dict
 
         # Convert input to a Pandas DataFrame
-        data_df = pd.DataFrame(input_data) # Pass the input data as a dict, and not a list of dicts.
+        data_df = pd.DataFrame(input_data, index = [0]) # Pass the input data as a dict, and not a list of dicts.
 
         # Create separate dataframes for numerical, label encoded, and binary features
         input_data_numerical = data_df[numerical_features + label_encoded_features]
