@@ -6,6 +6,6 @@ joblib
 pandas
 imblearn
 xgboost
-scikit-learn = 1.5.1
+scikit-learn == 1.5.1
 pydantic
 flask
