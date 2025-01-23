@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 app = Flask(__name__)
 
 # Enable CORS
-CORS(app, resources={r"/predict": {"origins": ["http://localhost:5175", "https://ispmodelchurn.vercel.app/"]}})  # Adjust as needed
+CORS(app, resources={r"/predict": {"origins": ["https://ispmodelchurn.vercel.app/"]}})  # Adjust as needed
 
 # Define the feature set
 numerical_features = ['total_unsuccessful_calls', 'CustomerServiceInteractionRatio', 'MinutesOverUsage',
