@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 app = Flask(__name__)
 
 # Enable CORS
-CORS(app, resources={r"/predict": {"origins": ["http://localhost:5173", "https://your-frontend-url.com"]}})  # Adjust as needed
+CORS(app, resources={r"/predict": {"origins": ["http://localhost:5175", "https://your-frontend-url.com"]}})  # Adjust as needed
 
 # Define the feature set
 features = [
