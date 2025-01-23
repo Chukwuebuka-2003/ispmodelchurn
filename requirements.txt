@@ -8,3 +8,4 @@ imblearn
 xgboost
 scikit-learn
 pydantic
+flask
