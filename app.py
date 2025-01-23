@@ -1,5 +1,5 @@
 from flask import Flask, request, jsonify
-from pydantic import BaseModel, ValidationError, validator
+from pydantic import BaseModel, ValidationError
 from flask_cors import CORS  # Import Flask-CORS
 import pickle
 import pandas as pd
@@ -15,8 +15,7 @@ logger = logging.getLogger(__name__)
 app = Flask(__name__)
 
 # Enable CORS
-CORS(app, resources={r"/predict": {"origins": os.getenv('CORS_ORIGINS', ["https://ispmodelchurn.vercel.app"]) }})  # Adjust as needed
-
+CORS(app, resources={r"/predict": {"origins": ["http://localhost:5175", "https://your-frontend-url.com"]}})  # Adjust as needed
 
 # Define the feature set
 numerical_features = ['total_unsuccessful_calls', 'CustomerServiceInteractionRatio', 'MinutesOverUsage',
@@ -51,13 +50,6 @@ class InputData(BaseModel):
     AgeHH2: int
     ChildrenInHH: int
 
-    @validator('*', pre=True)
-    def check_field_exists(cls, value, field):
-      if value is None:
-        raise ValueError(f"{field.name} was not provided")
-      return value
-
-
 # Load the model and the scaler
 MODEL_PATH = os.getenv("MODEL_PATH", "xgboost_model.sav")
 SCALER_PATH = os.getenv("SCALER_PATH", "minmax_scaler.sav")
@@ -85,10 +77,10 @@ def predict_churn():
     try:
         # Parse and validate input data
         input_json = request.get_json()
-        InputData(**input_json)
-        
+        input_data = InputData(**input_json).dict() # convert the pydantic object to a dict
+
         # Convert input to a Pandas DataFrame
-        data_df = pd.DataFrame(input_json, index = [0])
+        data_df = pd.DataFrame(input_data, index = [0]) # Pass the input data as a dict, and not a list of dicts.
 
         # Create separate dataframes for numerical, label encoded, and binary features
         input_data_numerical = data_df[numerical_features + label_encoded_features]
@@ -119,4 +111,4 @@ def predict_churn():
         return jsonify({'error': 'Error during prediction', 'details': str(e)}), 500
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=8000, debug=True)
+    app.run(host="0.0.0.0", port=5000, debug=True)
