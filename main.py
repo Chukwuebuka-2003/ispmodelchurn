@@ -1,37 +1,39 @@
-from fastapi import FastAPI, HTTPException, status
-from pydantic import BaseModel, validator, ValidationError
-from typing import List
-import joblib
-import pandas as pd
-import numpy as np
-import logging
 import os
-from prometheus_fastapi_instrumentator import Instrumentator
+import logging
+import pickle
+from typing import List, Dict, Any
 
-# Configure Logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+import pandas as pd
+import uvicorn
+from fastapi import FastAPI, HTTPException, status
+from pydantic import BaseModel, field_validator
+from prometheus_client import CollectorRegistry, Gauge, Counter, generate_latest
+from fastapi.responses import Response
+
+# Environment-based configuration
+PORT = int(os.getenv('PORT', 8000))
+MODEL_PATH = os.getenv('MODEL_PATH', 'xgboost_model.sav')
+LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO')
+
+# Optimized logging
+logging.basicConfig(
+    level=getattr(logging, LOG_LEVEL.upper()),
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="Churn Prediction API", description="A simple API to predict customer churn.")
+# Performance-optimized feature list
+FEATURES: List[str] = [
+    'total_unsuccessful_calls', 'CustomerServiceInteractionRatio', 
+    'MinutesOverUsage', 'TotalRevenueGenerated', 'TotalCallFeaturesUsed', 
+    'RetentionCalls', 'RetentionOffersAccepted', 'MadeCallToRetentionTeam', 
+    'AdjustmentsToCreditRating', 'MonthlyRevenue', 'TotalRecurringCharge', 
+    'OverageMinutes', 'MonthsInService', 'PercChangeMinutes', 'PercChangeRevenues', 
+    'HandsetPrice', 'CreditRating', 'IncomeGroup', 'AgeHH1', 'AgeHH2', 'ChildrenInHH'
+]
 
-# --- Prometheus Instrumentation ---
-instrumentator = Instrumentator().instrument(app)
-@app.on_event("startup")
-async def startup_event():
-    instrumentator.expose(app)
-
-
-# Define the feature set
-features = ['total_unsuccessful_calls', 'CustomerServiceInteractionRatio', 'MinutesOverUsage',
-            'TotalRevenueGenerated', 'TotalCallFeaturesUsed', 'RetentionCalls',
-            'RetentionOffersAccepted', 'MadeCallToRetentionTeam', 'AdjustmentsToCreditRating',
-            'MonthlyRevenue', 'TotalRecurringCharge', 'OverageMinutes', 'MonthsInService',
-            'PercChangeMinutes', 'PercChangeRevenues', 'HandsetPrice', 'CreditRating',
-            'IncomeGroup', 'AgeHH1', 'AgeHH2', 'ChildrenInHH']
-
-
-# Define the Data Validation Model
 class InputData(BaseModel):
+    """Validated input data model."""
     total_unsuccessful_calls: int
     CustomerServiceInteractionRatio: float
     MinutesOverUsage: float
@@ -54,54 +56,90 @@ class InputData(BaseModel):
     AgeHH2: int
     ChildrenInHH: int
 
-    # Example validation with Pydantic validators
-    @validator('*')
-    def check_non_negative(cls, value):
+    @field_validator('*')
+    @classmethod
+    def check_non_negative(cls, value: Any) -> Any:
+        """Validate non-negative numeric inputs."""
         if isinstance(value, (int, float)) and value < 0:
-            raise ValueError("Value must not be negative.")
+            raise ValueError("Value must not be negative")
         return value
 
 class PredictionResponse(BaseModel):
+    """Structured prediction response."""
     predicted_churn: int
     churn_probability: float
 
-# --- Model Loading ---
-MODEL_PATH = os.getenv("MODEL_PATH", "xgboost_model.sav")  # Load from env var, default path.
-pipeline = None  # initialize outside try block
-try:
-    pipeline = joblib.load(MODEL_PATH)
-    logger.info("Model successfully loaded from: %s", MODEL_PATH)
-except Exception as e:
-    logger.error(f"Error loading model from {MODEL_PATH}: {e}", exc_info=True)
-    raise HTTPException(
-        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        detail=f"Error loading model: {e}",
+class ModelPredictor:
+    """Efficient model management and prediction."""
+    _instance = None
+
+    def __new__(cls):
+        if not cls._instance:
+            cls._instance = super().__new__(cls)
+            cls._instance._load_model()
+        return cls._instance
+
+    def _load_model(self):
+        """Singleton model loading with pickle."""
+        try:
+            with open(MODEL_PATH, 'rb') as model_file:
+                self.model = pickle.load(model_file)
+            logger.info(f"Model loaded: {MODEL_PATH}")
+        except Exception as e:
+            logger.error(f"Model load failed: {e}")
+            raise RuntimeError(f"Could not initialize model: {e}")
+
+    def predict(self, data: Dict[str, Any]) -> Dict[str, float]:
+        """Optimized prediction method."""
+        try:
+            df = pd.DataFrame([data])[FEATURES]
+            probas = self.model.predict_proba(df)[0]
+            return {
+                'predicted_churn': int(probas[1] > 0.5),
+                'churn_probability': float(probas[1])
+            }
+        except Exception as e:
+            logger.error(f"Prediction error: {e}")
+            raise
+
+def create_app() -> FastAPI:
+    """Application factory with Render optimizations."""
+    app = FastAPI(
+        title="Churn Prediction API", 
+        description="Scalable customer churn prediction service"
     )
 
-@app.post("/predict", response_model=PredictionResponse)
-async def predict_churn(input_data: InputData):
-    """
-    Predict customer churn using a pre-trained model.
-    """
-    try:
-        # Convert input to a Pandas DataFrame
-        new_df = pd.DataFrame([input_data.dict()])
-        new_df = new_df[features]
+    # Prometheus metrics
+    registry = CollectorRegistry()
+    prediction_counter = Counter('churn_predictions_total', 'Total churn predictions', registry=registry)
+    prediction_probability = Gauge('churn_probability', 'Churn prediction probability', registry=registry)
 
-        # Make Predictions
-        prediction = pipeline.predict(new_df)[0]
-        probability = pipeline.predict_proba(new_df)[0][1]
+    predictor = ModelPredictor()
 
-        return PredictionResponse(predicted_churn=int(prediction), churn_probability=float(probability))
+    @app.post("/predict", response_model=PredictionResponse)
+    async def predict_churn(input_data: InputData):
+        """Streamlined prediction endpoint with metrics."""
+        try:
+            result = predictor.predict(input_data.model_dump())
+            
+            # Update Prometheus metrics
+            prediction_counter.inc()
+            prediction_probability.set(result['churn_probability'])
+            
+            return PredictionResponse(**result)
+        except ValueError as e:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+        except Exception as e:
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Prediction failed")
 
-    except ValidationError as e:
-        logger.error(f"Validation Error: {e}", exc_info=True)
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=f"Invalid Input Data: {e}")
+    @app.get("/metrics")
+    async def get_metrics():
+        """Expose Prometheus metrics endpoint."""
+        return Response(generate_latest(registry), media_type="text/plain")
 
-    except Exception as e:
-         logger.error(f"Error during prediction: {e}", exc_info=True)
-         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error during prediction: {e}")
+    return app
+
+app = create_app()
 
 if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=PORT)
