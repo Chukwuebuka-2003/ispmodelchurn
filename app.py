@@ -55,7 +55,7 @@ class InputData(BaseModel):
     ChildrenInHH: int
 
 # Load the model and the scaler
-MODEL_PATH = os.getenv("MODEL_PATH", "xgboost_model.sav")
+MODEL_PATH = os.getenv("MODEL_PATH", "lr_model.sav")
 SCALER_PATH = os.getenv("SCALER_PATH", "minmax_scaler.sav")
 try:
     with open(MODEL_PATH, 'rb') as file:
