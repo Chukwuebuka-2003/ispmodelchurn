@@ -10,3 +10,4 @@ scikit-learn == 1.5.1
 pydantic
 flask
 Flask-CORS
+flask_sqlalchemy
